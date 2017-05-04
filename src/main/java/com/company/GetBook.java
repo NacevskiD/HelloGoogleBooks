@@ -1,6 +1,7 @@
 package com.company;
 
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import javax.swing.*;
@@ -13,24 +14,24 @@ import java.net.URL;
 public class GetBook {
 
 
-    public static void getTitleByISBN(String isbn, BookGUI bookGUI) {
+    public static void searchBook(String searchQuery, BookGUI bookGUI) {
 
-        new BookAPIWorker(isbn, bookGUI).execute();
+        new BookAPIWorker(searchQuery, bookGUI).execute();
 
     }
 
-    private static class BookAPIWorker extends SwingWorker<String, Void>{
+    private static class BookAPIWorker extends SwingWorker<Book, Void>{
 
-        String isbn;
+        String query;
         BookGUI gui;
 
-        public BookAPIWorker(String isbn, BookGUI bookGUI) {
-            this.isbn = isbn;
+        public BookAPIWorker(String query, BookGUI bookGUI) {
+            this.query = query;
             this.gui = bookGUI;
         }
 
         @Override
-        protected String doInBackground() throws Exception {
+        protected Book doInBackground() throws Exception {
 
             String key = readKey();
 
@@ -44,9 +45,9 @@ public class GetBook {
 
             String baseURL = "https://www.googleapis.com/books/v1/volumes?q=%s&key=%s";
 
-            String url = String.format(baseURL, isbn, key);
+            String url = String.format(baseURL, query, key);
 
-            System.out.println(isbn);
+            System.out.println(query);
             System.out.println(url);
 
             InputStream stream = new URL(url).openConnection().getInputStream();
@@ -73,31 +74,50 @@ public class GetBook {
             JSONObject jsonObject = new JSONObject(responseString);
             JSONArray items = jsonObject.getJSONArray("items");
 
-            for (int x = 0 ; x < items.length() ; x++) {
-                JSONObject volumeInfo = items.getJSONObject(x).getJSONObject("volumeInfo");
-                String title = volumeInfo.getString("title");
-                String des = volumeInfo.getString("description");
-                System.out.println(title + " " + des);
-            }
 
             JSONObject volumeInfo = items.getJSONObject(0).getJSONObject("volumeInfo");
 
             String title = volumeInfo.getString("title");
-            String des = volumeInfo.getString("description");
+            String description = volumeInfo.getString("description");
+            try {
+                JSONArray authorList = volumeInfo.getJSONArray("authors");
+            }catch (JSONException je) {
+                System.out.println("No author(s) listed for this book.");
+            }
+            //todo figure out how to deal with authorList.
 
-            System.out.println(title);
-//            String description = items.getJSONObject(0).getJSONObject("volumeInfo").getString("description");
-//            System.out.println(description);
-//
-            return title;
+            // todo do you need ISBN?
+
+            double googleRating = 0;
+            try{
+                googleRating = volumeInfo.getDouble("averageRating");
+            }catch (JSONException je) {
+                System.out.println("No rating provided for this book.");
+
+            }
+
+        Book firstBook = new Book(title, "author goes here", description, "isbn goes here", googleRating);
+
+
+            // Example of looping over the array of results returned.
+            for (int x = 0 ; x < items.length() ; x++) {
+                JSONObject volumeInformation = items.getJSONObject(x).getJSONObject("volumeInfo");
+                String thisTitle = volumeInformation.getString("title");
+                String thisDescription = volumeInformation.getString("description");
+                System.out.println(x + " " + thisTitle + " " + thisDescription);
+            }
+
+
+            return firstBook;
+            //return title;
 
         }
 
         @Override
         public void done() {
             try {
-                String title = get();   // get() fetches whatever doInBackground returns.
-                gui.titleFetched(title);
+                Book book = get();   // get() fetches whatever doInBackground returns.
+                gui.firstResultIs(book);
             } catch (Exception e) {
                 System.out.println(e);
             }
